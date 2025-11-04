@@ -1,0 +1,14 @@
+from pydantic_settings import BaseSettings
+from typing import Optional
+
+class Settings(BaseSettings):
+    """Configuración de la aplicación usando variables de entorno"""
+    database_url: str
+    jwt_secret_key: str
+    jwt_algorithm: str = "HS256"
+    jwt_expire_hours: int = 24
+    
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
