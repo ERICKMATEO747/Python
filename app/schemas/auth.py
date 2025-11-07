@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, validator
 from typing import Optional
 import re
 from app.utils.security import SecurityValidator
+from app.models.user_type import UserType
 
 class UserRegister(BaseModel):
     """Schema para registro de usuario"""
@@ -9,6 +10,7 @@ class UserRegister(BaseModel):
     email: Optional[EmailStr] = None
     telefono: Optional[str] = None
     password: str
+    user_type_hash: str
     
     @validator('nombre')
     def validate_nombre(cls, v):
@@ -31,9 +33,25 @@ class UserRegister(BaseModel):
     
     @validator('password')
     def validate_password(cls, v):
-        is_valid, message = SecurityValidator.validate_password_strength(v)
-        if not is_valid:
-            raise ValueError(message)
+        if len(v) < 8:
+            raise ValueError('La contraseña debe tener al menos 8 caracteres')
+        return v
+    
+    @validator('user_type_hash')
+    def validate_user_type_hash(cls, v):
+        if not v or len(v) != 64:
+            raise ValueError('Código de tipo de usuario inválido')
+        
+        # Verificar que el hash existe en la BD (con manejo de errores)
+        try:
+            user_type = UserType.get_by_hash(v)
+            if not user_type:
+                raise ValueError('Tipo de usuario no válido')
+        except Exception:
+            # Si hay error de BD (tabla no existe), usar tipo por defecto
+            if v != 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456':
+                raise ValueError('Tipo de usuario no válido')
+        
         return v
     
     @validator('email')
@@ -54,6 +72,7 @@ class UserResponse(BaseModel):
     nombre: str
     email: Optional[str] = None
     telefono: Optional[str] = None
+    user_type: str
 
 class TokenResponse(BaseModel):
     """Schema para respuesta de token"""

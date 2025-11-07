@@ -1,5 +1,5 @@
 from app.config.database import get_db_connection
-from app.utils.logger import log_info, log_error
+from app.utils.logger import log_info, log_error, log_warning
 from typing import Optional, Dict
 from datetime import datetime, timedelta
 import random
@@ -37,20 +37,45 @@ class OTP:
         connection = get_db_connection()
         try:
             with connection.cursor() as cursor:
+                log_info("Buscando OTP en BD", email=email, otp_code=otp_code)
+                
+                # Primero verificar si existe el OTP sin importar expiración
+                cursor.execute(
+                    "SELECT *, expires_at FROM otp_codes WHERE email = %s AND otp_code = %s",
+                    (email, otp_code)
+                )
+                otp_record = cursor.fetchone()
+                
+                if not otp_record:
+                    log_warning("OTP no encontrado en BD", email=email, otp_code=otp_code)
+                    
+                    # Verificar si hay algún OTP para este email
+                    cursor.execute("SELECT email, otp_code, expires_at FROM otp_codes WHERE email = %s", (email,))
+                    all_otps = cursor.fetchall()
+                    log_info("OTPs existentes para email", email=email, count=len(all_otps), otps=all_otps)
+                    
+                    return False
+                
+                log_info("OTP encontrado en BD", email=email, otp_code=otp_code, 
+                        expires_at=str(otp_record['expires_at']))
+                
+                # Ahora verificar si no ha expirado
                 cursor.execute(
                     "SELECT * FROM otp_codes WHERE email = %s AND otp_code = %s AND expires_at > NOW()",
                     (email, otp_code)
                 )
-                result = cursor.fetchone()
+                valid_result = cursor.fetchone()
                 
-                if result:
-                    log_info("OTP verificado exitosamente", email=email)
+                if valid_result:
+                    log_info("OTP verificado exitosamente", email=email, otp_code=otp_code)
                     return True
                 else:
-                    log_info("OTP inválido o expirado", email=email)
+                    log_warning("OTP expirado", email=email, otp_code=otp_code, 
+                              expires_at=str(otp_record['expires_at']))
                     return False
+                    
         except Exception as e:
-            log_error("Error verificando OTP", error=e)
+            log_error("Error verificando OTP", error=e, email=email, otp_code=otp_code)
             return False
         finally:
             connection.close()

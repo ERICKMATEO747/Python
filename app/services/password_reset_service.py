@@ -48,22 +48,31 @@ class PasswordResetService:
     def verify_otp_code(email: str, otp_code: str) -> Dict:
         """Verifica código OTP"""
         try:
+            log_info("Iniciando verificación OTP recuperación", email=email, otp_code=otp_code)
+            
             # Verificar que el usuario existe
             user = User.get_by_email(email)
             if not user:
+                log_warning("Usuario no encontrado para recuperación", email=email)
                 return {
                     "success": False,
                     "message": "Código inválido o expirado"
                 }
+            
+            log_info("Usuario encontrado para recuperación", email=email, user_id=user['id'])
             
             # Verificar OTP
-            if not OTP.verify(email, otp_code):
+            otp_result = OTP.verify(email, otp_code)
+            log_info("Resultado verificación OTP recuperación", email=email, otp_code=otp_code, result=otp_result)
+            
+            if not otp_result:
+                log_warning("OTP de recuperación inválido o expirado", email=email, otp_code=otp_code)
                 return {
                     "success": False,
                     "message": "Código inválido o expirado"
                 }
             
-            log_info("Código OTP verificado exitosamente", email=email)
+            log_info("Código OTP de recuperación verificado exitosamente", email=email)
             
             return {
                 "success": True,
@@ -71,8 +80,11 @@ class PasswordResetService:
             }
             
         except Exception as e:
-            log_error("Error verificando OTP", error=e)
-            raise Exception("Error verificando código")
+            log_error("Error verificando OTP de recuperación", error=e, email=email, otp_code=otp_code)
+            return {
+                "success": False,
+                "message": "Código inválido o expirado"
+            }
     
     @staticmethod
     def reset_password(email: str, otp_code: str, new_password: str) -> Dict:

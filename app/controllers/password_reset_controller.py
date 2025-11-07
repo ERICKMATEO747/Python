@@ -37,7 +37,7 @@ class PasswordResetController:
     
     @staticmethod
     def verify_otp(verify_data: VerifyOTPRequest, request: Request) -> Dict:
-        """Maneja verificación de código OTP"""
+        """Maneja verificación de código OTP (recuperación y registro)"""
         client_ip = request.client.host
         
         # Rate limiting
@@ -49,18 +49,41 @@ class PasswordResetController:
             )
         
         try:
-            log_info("Verificación de código OTP", email=verify_data.email, ip=client_ip)
+            log_info("=== INICIO VERIFICACIÓN OTP ===", email=verify_data.email, otp_code=verify_data.otp_code, ip=client_ip)
             
+            # Intentar verificar OTP de recuperación de contraseña primero
+            log_info("Intentando verificar como OTP de recuperación", email=verify_data.email)
             result = PasswordResetService.verify_otp_code(verify_data.email, verify_data.otp_code)
+            log_info("Resultado OTP recuperación", email=verify_data.email, result=result)
             
-            if not result["success"]:
-                log_warning("Código OTP inválido", email=verify_data.email, ip=client_ip)
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=result["message"]
-                )
+            if result["success"]:
+                log_info("OTP de recuperación verificado exitosamente", email=verify_data.email, ip=client_ip)
+                return {
+                    "success": True,
+                    "message": "Código verificado correctamente",
+                    "type": "password_reset"
+                }
             
-            return result
+            # Si no es de recuperación, intentar verificar OTP de registro
+            log_info("Intentando verificar como OTP de registro", email=verify_data.email)
+            from app.services.registration_otp_service import RegistrationOTPService
+            result = RegistrationOTPService.verify_registration_otp(verify_data.email, verify_data.otp_code)
+            log_info("Resultado OTP registro", email=verify_data.email, result=result)
+            
+            if result["success"]:
+                log_info("OTP de registro verificado exitosamente", email=verify_data.email, ip=client_ip)
+                return {
+                    "success": True,
+                    "message": "Código verificado correctamente",
+                    "type": "registration"
+                }
+            
+            # Si ninguno funciona
+            log_warning("=== Código OTP inválido para ambos tipos ===", email=verify_data.email, otp_code=verify_data.otp_code, ip=client_ip)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Código inválido o expirado"
+            )
             
         except HTTPException:
             raise

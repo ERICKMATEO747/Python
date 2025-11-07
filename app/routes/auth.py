@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Request, Depends
 from app.schemas.auth import UserRegister, UserLogin
 from app.schemas.password_reset import PasswordResetRequest, VerifyOTPRequest, ResetPasswordRequest
+from app.schemas.registration_otp import RegistrationOTPRequest
 from app.controllers.auth_controller import AuthController
 from app.controllers.password_reset_controller import PasswordResetController
+from app.controllers.registration_otp_controller import RegistrationOTPController
 from app.utils.auth_middleware import get_current_user
 from app.utils.logger import log_info
 from typing import Dict
@@ -20,6 +22,7 @@ async def register(user_data: UserRegister, request: Request):
     - **email**: Email válido del usuario (opcional si se proporciona teléfono)
     - **telefono**: Número de teléfono (opcional si se proporciona email)
     - **password**: Contraseña (mínimo 8 caracteres, debe incluir mayúscula, minúscula y número)
+    - **user_type_hash**: Código hash del tipo de usuario (64 caracteres)
     
     Nota: Debe proporcionar al menos email o teléfono
     """
@@ -37,6 +40,18 @@ async def login(login_data: UserLogin, request: Request):
     """
     return AuthController.login(login_data, request)
 
+@router.post("/send-registration-otp")
+async def send_registration_otp(otp_data: RegistrationOTPRequest, request: Request):
+    """
+    Endpoint PÚBLICO para enviar código OTP de registro
+    
+    - **email**: Email para el cual se generará el código OTP
+    
+    Envía un código OTP de 6 dígitos al email (válido por 10 minutos)
+    Este código es para verificar el email durante el proceso de registro
+    """
+    return RegistrationOTPController.send_otp(otp_data, request)
+
 @router.post("/forgot-password")
 async def forgot_password(reset_data: PasswordResetRequest, request: Request):
     """
@@ -51,12 +66,16 @@ async def forgot_password(reset_data: PasswordResetRequest, request: Request):
 @router.post("/verify-otp")
 async def verify_otp(verify_data: VerifyOTPRequest, request: Request):
     """
-    Endpoint PÚBLICO para verificar código OTP
+    Endpoint PÚBLICO para verificar código OTP (registro o recuperación)
     
     - **email**: Email del usuario
     - **otp_code**: Código de 6 dígitos recibido por email
     
-    Verifica que el código sea válido y no haya expirado (10 min)
+    Verifica códigos OTP tanto de:
+    - Registro de nuevos usuarios
+    - Recuperación de contraseña
+    
+    Retorna el tipo de OTP verificado en el campo 'type'
     """
     return PasswordResetController.verify_otp(verify_data, request)
 

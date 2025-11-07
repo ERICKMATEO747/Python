@@ -1,5 +1,6 @@
 import pymysql
 from app.config.settings import settings
+from app.utils.logger import log_info
 
 def get_db_connection():
     """Obtiene conexión a la base de datos MySQL"""
@@ -54,6 +55,55 @@ def init_database():
                     INDEX idx_expires (expires_at)
                 )
             """)
+            
+            # Tabla user_types
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_types (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    type_name VARCHAR(50) NOT NULL UNIQUE,
+                    type_hash VARCHAR(64) NOT NULL UNIQUE,
+                    description VARCHAR(200),
+                    active TINYINT(1) DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Insertar tipos de usuario por defecto
+            cursor.execute("""
+                INSERT IGNORE INTO user_types (type_name, type_hash, description) VALUES 
+                ('cliente', 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456', 'Usuario cliente final'),
+                ('negocio', 'b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456a1', 'Usuario propietario de negocio'),
+                ('admin', 'c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456a1b2', 'Administrador del sistema')
+            """)
+            
+            # Verificar y agregar columna user_type_id si no existe
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = 'users' 
+                AND COLUMN_NAME = 'user_type_id'
+            """)
+            column_exists = cursor.fetchone()['count'] > 0
+            
+            if not column_exists:
+                log_info("Agregando columna user_type_id a tabla users")
+                cursor.execute("ALTER TABLE users ADD COLUMN user_type_id INT NOT NULL DEFAULT 1")
+                
+                # Verificar si la foreign key ya existe
+                cursor.execute("""
+                    SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+                    WHERE TABLE_SCHEMA = DATABASE() 
+                    AND TABLE_NAME = 'users' 
+                    AND COLUMN_NAME = 'user_type_id' 
+                    AND REFERENCED_TABLE_NAME = 'user_types'
+                """)
+                fk_exists = cursor.fetchone()['count'] > 0
+                
+                if not fk_exists:
+                    cursor.execute("ALTER TABLE users ADD FOREIGN KEY (user_type_id) REFERENCES user_types(id)")
+                    log_info("Foreign key user_type_id agregada exitosamente")
+            else:
+                log_info("Columna user_type_id ya existe en tabla users")
             
         connection.commit()
     finally:

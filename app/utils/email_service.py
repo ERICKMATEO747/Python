@@ -8,6 +8,65 @@ class EmailService:
     """Servicio para envío de emails"""
     
     @staticmethod
+    def get_registration_otp_template(nombre: str, otp_code: str) -> str:
+        """Genera template HTML para OTP de registro"""
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Código de Verificación - Registro</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }}
+                .container {{ max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                .header {{ text-align: center; color: #333; margin-bottom: 30px; }}
+                .logo {{ font-size: 36px; font-weight: bold; color: #007bff; margin-bottom: 10px; }}
+                .otp-code {{ background-color: #28a745; color: white; font-size: 32px; font-weight: bold; text-align: center; padding: 20px; border-radius: 8px; margin: 20px 0; letter-spacing: 5px; }}
+                .welcome-section {{ background-color: #e8f5e8; border: 1px solid #28a745; color: #155724; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+                .info {{ background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+                .footer {{ text-align: center; color: #666; font-size: 12px; margin-top: 30px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div class="logo">🏆 Auth API</div>
+                    <h1>🔐 Verificación de Registro</h1>
+                </div>
+                
+                <p>Hola <strong>{nombre}</strong>,</p>
+                
+                <div class="welcome-section">
+                    <strong>🎉 ¡Bienvenido!</strong><br>
+                    Estamos emocionados de tenerte en nuestra plataforma. Para completar tu registro, necesitamos verificar tu email.
+                </div>
+                
+                <p>Usa el siguiente código de verificación para completar tu registro:</p>
+                
+                <div class="otp-code">{otp_code}</div>
+                
+                <div class="info">
+                    <strong>ℹ️ Información importante:</strong>
+                    <ul>
+                        <li>Este código expira en <strong>10 minutos</strong></li>
+                        <li>Solo puede ser usado una vez</li>
+                        <li>Ingresa este código en la aplicación para activar tu cuenta</li>
+                        <li>Si no solicitaste este registro, ignora este email</li>
+                    </ul>
+                </div>
+                
+                <p>Una vez verificado tu email, podrás acceder a todas las funcionalidades de la plataforma.</p>
+                
+                <div class="footer">
+                    <p>Este es un email automático, no respondas a este mensaje.</p>
+                    <p>© 2024 Auth API - Sistema de Autenticación</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+    
+    @staticmethod
     def get_password_reset_template(nombre: str, otp_code: str) -> str:
         """Genera template HTML para recuperación de contraseña"""
         return f"""
@@ -398,6 +457,56 @@ class EmailService:
         print(f"📧 EMAIL SIMULADO ENVIADO A: {email}")
         print(f"🔑 CÓDIGO OTP: {otp_code}")
         print(f"⏰ EXPIRA EN: 10 minutos")
+        print(f"{'='*60}\n")
+        
+        return True
+    
+    @staticmethod
+    def send_registration_otp_email(email: str, otp_code: str) -> bool:
+        """Envía email con código OTP para registro"""
+        try:
+            from app.config.settings import settings
+            
+            # Si no hay configuración SMTP, usar modo simulado
+            if not settings.smtp_username or not settings.smtp_password:
+                return EmailService._send_simulated_registration_otp(email, otp_code)
+            
+            html_content = EmailService.get_registration_otp_template("Usuario", otp_code)
+            
+            # Crear mensaje
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = "🔐 Código de Verificación - Completa tu Registro"
+            msg['From'] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
+            msg['To'] = email
+            
+            # Agregar contenido HTML
+            html_part = MIMEText(html_content, 'html', 'utf-8')
+            msg.attach(html_part)
+            
+            # Enviar email
+            server = smtplib.SMTP(settings.smtp_server, settings.smtp_port)
+            server.starttls()
+            server.login(settings.smtp_username, settings.smtp_password)
+            server.send_message(msg)
+            server.quit()
+            
+            log_info("Email de OTP de registro enviado exitosamente", email=email)
+            return True
+            
+        except Exception as e:
+            log_error("Error enviando email de OTP de registro", error=e)
+            return EmailService._send_simulated_registration_otp(email, otp_code)
+    
+    @staticmethod
+    def _send_simulated_registration_otp(email: str, otp_code: str) -> bool:
+        """Envía email de OTP de registro simulado (para desarrollo)"""
+        log_info("Email de OTP de registro simulado", email=email, otp_code=otp_code)
+        
+        print(f"\n{'='*60}")
+        print(f"📧 EMAIL OTP REGISTRO ENVIADO A: {email}")
+        print(f"🔑 CÓDIGO OTP: {otp_code}")
+        print(f"⏰ EXPIRA EN: 10 minutos")
+        print(f"🎉 PROPÓSITO: Verificación de registro")
         print(f"{'='*60}\n")
         
         return True

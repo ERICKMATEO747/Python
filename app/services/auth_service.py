@@ -31,7 +31,7 @@ class AuthService:
         return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
     
     @staticmethod
-    def register_user(nombre: str, email: Optional[str], telefono: Optional[str], password: str) -> Dict:
+    def register_user(nombre: str, email: Optional[str], telefono: Optional[str], password: str, user_type_hash: str) -> Dict:
         """Registra un nuevo usuario"""
         # Verificar si el email o teléfono ya existen
         if email:
@@ -46,7 +46,7 @@ class AuthService:
         
         # Encriptar contraseña y crear usuario
         hashed_password = AuthService.hash_password(password)
-        user = User.create(nombre, email, telefono, hashed_password)
+        user = User.create(nombre, email, telefono, hashed_password, user_type_hash)
         return user
     
     @staticmethod
@@ -64,5 +64,6 @@ class AuthService:
             "id": user['id'],
             "nombre": user['nombre'],
             "email": user['email'],
-            "telefono": user['telefono']
+            "telefono": user['telefono'],
+            "user_type": user['user_type']
         }

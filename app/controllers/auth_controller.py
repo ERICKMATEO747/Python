@@ -32,7 +32,8 @@ class AuthController:
                 nombre=user_data.nombre,
                 email=user_data.email,
                 telefono=user_data.telefono,
-                password=user_data.password
+                password=user_data.password,
+                user_type_hash=user_data.user_type_hash
             )
             
             # Enviar email de bienvenida si hay email
@@ -76,7 +77,8 @@ class AuthController:
                 "id": current_user['id'],
                 "nombre": current_user['nombre'],
                 "email": current_user['email'],
-                "telefono": current_user['telefono']
+                "telefono": current_user['telefono'],
+                "user_type": current_user['user_type']
             }
         }
     

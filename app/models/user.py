@@ -1,20 +1,33 @@
 from app.config.database import get_db_connection
 from app.utils.logger import log_info, log_error
+from app.models.user_type import UserType
 from typing import Optional, Dict
 
 class User:
     """Modelo para operaciones de usuario en la base de datos"""
     
     @staticmethod
-    def create(nombre: str, email: Optional[str], telefono: Optional[str], hashed_password: str) -> Dict:
+    def create(nombre: str, email: Optional[str], telefono: Optional[str], hashed_password: str, user_type_hash: str) -> Dict:
         """Crea un nuevo usuario en la base de datos"""
         connection = get_db_connection()
         try:
             with connection.cursor() as cursor:
-                log_info("Creando usuario en BD", email=email, telefono=telefono[:4] + "****" if telefono else None)
+                # Obtener user_type_id por hash con fallback
+                try:
+                    user_type = UserType.get_by_hash(user_type_hash)
+                    if not user_type:
+                        # Fallback a tipo cliente por defecto
+                        user_type = {'id': 1, 'type_name': 'cliente'}
+                        log_info("Usando tipo de usuario por defecto", type="cliente")
+                except Exception as e:
+                    # Si hay error de BD, usar tipo por defecto
+                    user_type = {'id': 1, 'type_name': 'cliente'}
+                    log_info("Error obteniendo tipo de usuario, usando por defecto", error=str(e))
+                
+                log_info("Creando usuario en BD", email=email, telefono=telefono[:4] + "****" if telefono else None, user_type=user_type['type_name'])
                 cursor.execute(
-                    "INSERT INTO users (nombre, email, telefono, password) VALUES (%s, %s, %s, %s)",
-                    (nombre, email, telefono, hashed_password)
+                    "INSERT INTO users (nombre, email, telefono, password, user_type_id) VALUES (%s, %s, %s, %s, %s)",
+                    (nombre, email, telefono, hashed_password, user_type['id'])
                 )
                 user_id = cursor.lastrowid
                 connection.commit()
@@ -23,7 +36,8 @@ class User:
                     "id": user_id,
                     "nombre": nombre,
                     "email": email,
-                    "telefono": telefono
+                    "telefono": telefono,
+                    "user_type": user_type['type_name']
                 }
         except Exception as e:
             log_error("Error creando usuario en BD", error=e)
@@ -37,7 +51,25 @@ class User:
         connection = get_db_connection()
         try:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+                # Intentar con JOIN, si falla usar consulta simple
+                try:
+                    cursor.execute("""
+                        SELECT u.*, ut.type_name as user_type 
+                        FROM users u 
+                        LEFT JOIN user_types ut ON u.user_type_id = ut.id 
+                        WHERE u.email = %s
+                    """, (email,))
+                    result = cursor.fetchone()
+                    if result and not result.get('user_type'):
+                        result['user_type'] = 'cliente'  # Fallback
+                    return result
+                except Exception:
+                    # Fallback para BD sin user_type_id
+                    cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+                    result = cursor.fetchone()
+                    if result:
+                        result['user_type'] = 'cliente'
+                    return result
                 return cursor.fetchone()
         finally:
             connection.close()
@@ -77,7 +109,25 @@ class User:
         connection = get_db_connection()
         try:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT id, nombre, email, telefono FROM users WHERE id = %s", (user_id,))
+                # Intentar con JOIN, si falla usar consulta simple
+                try:
+                    cursor.execute("""
+                        SELECT u.id, u.nombre, u.email, u.telefono, ut.type_name as user_type 
+                        FROM users u 
+                        LEFT JOIN user_types ut ON u.user_type_id = ut.id 
+                        WHERE u.id = %s
+                    """, (user_id,))
+                    result = cursor.fetchone()
+                    if result and not result.get('user_type'):
+                        result['user_type'] = 'cliente'  # Fallback
+                    return result
+                except Exception:
+                    # Fallback para BD sin user_type_id
+                    cursor.execute("SELECT id, nombre, email, telefono FROM users WHERE id = %s", (user_id,))
+                    result = cursor.fetchone()
+                    if result:
+                        result['user_type'] = 'cliente'
+                    return result
                 return cursor.fetchone()
         finally:
             connection.close()

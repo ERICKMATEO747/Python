@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.auth import router as auth_router
@@ -5,11 +6,29 @@ from app.routes.protected import router as protected_router
 from app.config.database import init_database
 from app.utils.logger import log_info, log_error
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Maneja el ciclo de vida de la aplicación"""
+    try:
+        log_info("Iniciando aplicación Auth API")
+        init_database()
+        log_info("Base de datos inicializada correctamente")
+        log_info("Aplicación lista para recibir requests")
+    except Exception as e:
+        log_error("Error inicializando aplicación", error=e)
+        raise
+    
+    yield
+    
+    # Cleanup al cerrar la aplicación
+    log_info("Cerrando aplicación Auth API")
+
 # Crear instancia de FastAPI
 app = FastAPI(
     title="Auth API",
     description="API de autenticación con registro y login",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Configurar CORS
@@ -25,17 +44,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(protected_router)
 
-@app.on_event("startup")
-async def startup_event():
-    """Inicializa la base de datos al arrancar la aplicación"""
-    try:
-        log_info("Iniciando aplicación Auth API")
-        init_database()
-        log_info("Base de datos inicializada correctamente")
-        log_info("Aplicación lista para recibir requests")
-    except Exception as e:
-        log_error("Error inicializando aplicación", error=e)
-        raise
+
 
 @app.get("/")
 async def root():
