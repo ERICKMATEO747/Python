@@ -15,51 +15,133 @@ class EmailService:
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>Código de Verificación - Registro</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Código de Verificación - Flevo</title>
             <style>
-                body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }}
-                .container {{ max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-                .header {{ text-align: center; color: #333; margin-bottom: 30px; }}
-                .logo {{ font-size: 36px; font-weight: bold; color: #007bff; margin-bottom: 10px; }}
-                .otp-code {{ background-color: #28a745; color: white; font-size: 32px; font-weight: bold; text-align: center; padding: 20px; border-radius: 8px; margin: 20px 0; letter-spacing: 5px; }}
-                .welcome-section {{ background-color: #e8f5e8; border: 1px solid #28a745; color: #155724; padding: 15px; border-radius: 5px; margin: 20px 0; }}
-                .info {{ background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 5px; margin: 20px 0; }}
-                .footer {{ text-align: center; color: #666; font-size: 12px; margin-top: 30px; }}
+                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #162a52 0%, #2c4a7a 50%, #162a52 100%); min-height: 100vh; padding: 10px; }}
+                .email-wrapper {{ max-width: 600px; margin: 0 auto; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 20px 40px rgba(22, 42, 82, 0.3); }}
+                
+                .header {{ background: linear-gradient(135deg, #162a52 0%, #2c4a7a 50%, #162a52 100%); color: white; text-align: center; padding: 30px 20px; position: relative; }}
+                .header-content {{ position: relative; z-index: 2; }}
+                .logo {{ font-size: 32px; font-weight: 900; margin-bottom: 10px; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.3); background: linear-gradient(45deg, #ffffff, #f6ad55); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }}
+                .subtitle {{ font-size: 16px; opacity: 0.95; font-weight: 300; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }}
+                .verification-badge {{ background: rgba(246, 173, 85, 0.2); border: 2px solid #f6ad55; color: #f6ad55; padding: 6px 15px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-top: 15px; display: inline-block; }}
+                
+                .content {{ padding: 30px 20px; background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%); }}
+                .hero-image {{ text-align: center; margin-bottom: 25px; }}
+                .hero-icon {{ font-size: 48px; background: linear-gradient(135deg, #162a52, #f6ad55); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; filter: drop-shadow(0 2px 4px rgba(22, 42, 82, 0.2)); }}
+                .greeting {{ font-size: 20px; color: #162a52; margin-bottom: 20px; font-weight: 700; text-align: center; }}
+                .message {{ color: #4a5568; line-height: 1.6; margin-bottom: 25px; font-size: 15px; text-align: center; }}
+                
+                .welcome-section {{ background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border: 2px solid #f6ad55; border-radius: 15px; padding: 25px 15px; text-align: center; margin: 25px 0; position: relative; }}
+                .welcome-section::before {{ content: '🎉'; position: absolute; top: -15px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #162a52, #2c4a7a); color: white; padding: 10px; border-radius: 50%; font-size: 18px; border: 3px solid #f6ad55; }}
+                .welcome-title {{ color: #162a52; font-weight: 800; margin-bottom: 15px; font-size: 18px; margin-top: 10px; }}
+                .welcome-text {{ color: #4a5568; font-size: 15px; line-height: 1.5; }}
+                
+                .otp-section {{ background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border: 2px solid #f6ad55; border-radius: 15px; padding: 25px 15px; text-align: center; margin: 25px 0; position: relative; }}
+                .otp-section::before {{ content: '🔐'; position: absolute; top: -15px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #162a52, #2c4a7a); color: white; padding: 10px; border-radius: 50%; font-size: 18px; border: 3px solid #f6ad55; }}
+                .otp-label {{ color: #162a52; font-weight: 700; margin-bottom: 15px; font-size: 16px; margin-top: 10px; }}
+                .otp-code {{ background: linear-gradient(135deg, #162a52 0%, #2c4a7a 100%); color: white; font-size: 28px; font-weight: 900; padding: 15px 20px; border-radius: 10px; letter-spacing: 8px; display: inline-block; box-shadow: 0 8px 20px rgba(22, 42, 82, 0.3); border: 3px solid #f6ad55; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }}
+                
+                .info-section {{ background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border: 2px solid #f6ad55; color: #e65100; padding: 20px 15px; border-radius: 15px; margin: 25px 0; position: relative; }}
+                .info-section::before {{ content: 'ℹ️'; position: absolute; top: -15px; left: 20px; background: #f6ad55; color: white; padding: 10px; border-radius: 50%; font-size: 16px; border: 3px solid white; }}
+                .info-title {{ font-weight: 800; margin-bottom: 15px; margin-left: 15px; font-size: 16px; color: #162a52; }}
+                .info-section ul {{ margin: 10px 0 0 25px; }}
+                .info-section li {{ margin: 8px 0; font-weight: 600; font-size: 13px; }}
+                
+                .divider {{ height: 2px; background: linear-gradient(90deg, transparent, #f6ad55, #162a52, #f6ad55, transparent); margin: 25px 0; border-radius: 1px; }}
+                
+                .footer {{ background: linear-gradient(135deg, #162a52 0%, #2c4a7a 100%); color: white; padding: 25px 20px; text-align: center; position: relative; }}
+                .footer-content {{ position: relative; z-index: 2; }}
+                .footer-logo {{ font-size: 24px; font-weight: 900; margin-bottom: 15px; letter-spacing: 2px; background: linear-gradient(45deg, #ffffff, #f6ad55); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }}
+                .footer-text {{ color: rgba(255,255,255,0.9); font-size: 12px; margin: 8px 0; line-height: 1.4; }}
+                .footer-brand {{ color: #f6ad55; font-weight: 700; }}
+                .footer-tagline {{ color: #f6ad55; font-weight: 600; font-size: 14px; margin-top: 10px; }}
+                
+                @media only screen and (max-width: 480px) {{
+                    body {{ padding: 5px; }}
+                    .email-wrapper {{ border-radius: 10px; }}
+                    .header {{ padding: 20px 15px; }}
+                    .logo {{ font-size: 28px; letter-spacing: 1px; }}
+                    .subtitle {{ font-size: 14px; }}
+                    .verification-badge {{ font-size: 11px; padding: 5px 12px; }}
+                    .content {{ padding: 20px 15px; }}
+                    .hero-icon {{ font-size: 40px; }}
+                    .greeting {{ font-size: 18px; margin-bottom: 15px; }}
+                    .message {{ font-size: 14px; margin-bottom: 20px; }}
+                    .welcome-section {{ padding: 20px 10px; margin: 20px 0; }}
+                    .welcome-title {{ font-size: 16px; }}
+                    .welcome-text {{ font-size: 14px; }}
+                    .otp-section {{ padding: 20px 10px; margin: 20px 0; }}
+                    .otp-label {{ font-size: 15px; margin-bottom: 12px; }}
+                    .otp-code {{ font-size: 24px; padding: 12px 15px; letter-spacing: 6px; }}
+                    .info-section {{ padding: 15px 10px; margin: 20px 0; }}
+                    .info-title {{ font-size: 15px; margin-left: 10px; }}
+                    .info-section ul {{ margin-left: 20px; }}
+                    .info-section li {{ font-size: 12px; }}
+                    .footer {{ padding: 20px 15px; }}
+                    .footer-logo {{ font-size: 20px; }}
+                    .footer-text {{ font-size: 11px; }}
+                    .footer-tagline {{ font-size: 13px; }}
+                }}
             </style>
         </head>
         <body>
-            <div class="container">
+            <div class="email-wrapper">
                 <div class="header">
-                    <div class="logo">🏆 Auth API</div>
-                    <h1>🔐 Verificación de Registro</h1>
+                    <div class="header-content">
+                        <div class="logo">🏆 FLEVO</div>
+                        <div class="subtitle">Tu programa de lealtad favorito</div>
+                        <div class="verification-badge">🔐 Verificación de Registro</div>
+                    </div>
                 </div>
                 
-                <p>Hola <strong>{nombre}</strong>,</p>
-                
-                <div class="welcome-section">
-                    <strong>🎉 ¡Bienvenido!</strong><br>
-                    Estamos emocionados de tenerte en nuestra plataforma. Para completar tu registro, necesitamos verificar tu email.
+                <div class="content">
+                    <div class="hero-image">
+                        <div class="hero-icon">🔐🏆</div>
+                    </div>
+                    
+                    <div class="greeting">Estimado <strong>{nombre}</strong> 👋</div>
+                    
+                    <div class="welcome-section">
+                        <div class="welcome-title">🎉 ¡Bienvenido a Flevo!</div>
+                        <div class="welcome-text">Estamos emocionados de tenerte en nuestra plataforma de lealtad. Para completar tu registro y comenzar a acumular puntos, necesitamos verificar tu email.</div>
+                    </div>
+                    
+                    <div class="message">
+                        Usa el siguiente código de verificación para activar tu cuenta Flevo:
+                    </div>
+                    
+                    <div class="otp-section">
+                        <div class="otp-label">Tu código de verificación</div>
+                        <div class="otp-code">{otp_code}</div>
+                    </div>
+                    
+                    <div class="info-section">
+                        <div class="info-title">Información importante</div>
+                        <ul>
+                            <li>Este código expira en <strong>10 minutos</strong></li>
+                            <li>Solo puede ser usado <strong>una vez</strong></li>
+                            <li>Ingresa este código en la aplicación para activar tu cuenta</li>
+                            <li>Si no solicitaste este registro, ignora este email</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div class="message">
+                        Una vez verificado tu email, podrás acceder a todas las funcionalidades de Flevo y comenzar a <strong>ganar puntos increíbles</strong>.
+                    </div>
                 </div>
-                
-                <p>Usa el siguiente código de verificación para completar tu registro:</p>
-                
-                <div class="otp-code">{otp_code}</div>
-                
-                <div class="info">
-                    <strong>ℹ️ Información importante:</strong>
-                    <ul>
-                        <li>Este código expira en <strong>10 minutos</strong></li>
-                        <li>Solo puede ser usado una vez</li>
-                        <li>Ingresa este código en la aplicación para activar tu cuenta</li>
-                        <li>Si no solicitaste este registro, ignora este email</li>
-                    </ul>
-                </div>
-                
-                <p>Una vez verificado tu email, podrás acceder a todas las funcionalidades de la plataforma.</p>
                 
                 <div class="footer">
-                    <p>Este es un email automático, no respondas a este mensaje.</p>
-                    <p>© 2024 Auth API - Sistema de Autenticación</p>
+                    <div class="footer-content">
+                        <div class="footer-logo">🏆 FLEVO</div>
+                        <div class="footer-text">Este es un email automático, no respondas a este mensaje.</div>
+                        <div class="footer-text">© 2025 <span class="footer-brand">Flevo App</span> - Sistema de Autenticación</div>
+                        <div class="footer-tagline">Tu programa de lealtad de confianza</div>
+                    </div>
                 </div>
             </div>
         </body>
@@ -379,7 +461,7 @@ class EmailService:
             
             msg = MIMEMultipart('alternative')
             msg['Subject'] = "🏆 ¡Bienvenido a Flevo! Tu aventura de recompensas comienza"
-            msg['From'] = f"Flevo App <{settings.smtp_from_email}>"
+            msg['From'] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
             msg['To'] = email
             
             html_part = MIMEText(html_content, 'html', 'utf-8')
@@ -426,7 +508,7 @@ class EmailService:
             # Crear mensaje
             msg = MIMEMultipart('alternative')
             msg['Subject'] = "🏆 Flevo - Código de Recuperación Segura"
-            msg['From'] = f"Flevo App <{settings.smtp_from_email}>"
+            msg['From'] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
             msg['To'] = email
             
             # Agregar contenido HTML
@@ -475,7 +557,7 @@ class EmailService:
             
             # Crear mensaje
             msg = MIMEMultipart('alternative')
-            msg['Subject'] = "🔐 Código de Verificación - Completa tu Registro"
+            msg['Subject'] = "🏆 Flevo - Código de Verificación de Registro"
             msg['From'] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
             msg['To'] = email
             

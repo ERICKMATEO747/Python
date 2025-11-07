@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_from_email: str = ""
-    smtp_from_name: str = "Auth API"
+    smtp_from_name: str = "Flevo App"
     
     class Config:
         env_file = ".env"

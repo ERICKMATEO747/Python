@@ -3,6 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.auth import router as auth_router
 from app.routes.protected import router as protected_router
+from app.routes.municipalities import router as municipalities_router
+from app.routes.businesses import router as businesses_router
+from app.routes.user import router as user_router
+from app.routes.menu import router as menu_router
 from app.config.database import init_database
 from app.utils.logger import log_info, log_error
 
@@ -43,6 +47,10 @@ app.add_middleware(
 # Incluir rutas
 app.include_router(auth_router)
 app.include_router(protected_router)
+app.include_router(municipalities_router)
+app.include_router(businesses_router)
+app.include_router(user_router)
+app.include_router(menu_router)
 
 
 
@@ -57,5 +65,5 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    log_info("Iniciando servidor en http://127.0.0.1:8000")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    log_info("Iniciando servidor en http://0.0.0.0:8000")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

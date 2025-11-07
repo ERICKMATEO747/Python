@@ -1,9 +1,13 @@
 import bcrypt
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
+from fastapi import HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config.settings import settings
 from app.models.user import User
 from typing import Optional, Dict
+
+security = HTTPBearer()
 
 class AuthService:
     """Servicio de autenticación con lógica de negocio"""
@@ -67,3 +71,32 @@ class AuthService:
             "telefono": user['telefono'],
             "user_type": user['user_type']
         }
+    
+    @staticmethod
+    def verify_token(token: str) -> Optional[Dict]:
+        """Verifica y decodifica un JWT token"""
+        try:
+            payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+            user_id = int(payload.get("sub"))
+            if user_id is None:
+                return None
+            
+            user = User.get_by_id(user_id)
+            if user is None:
+                return None
+            
+            return {
+                "id": user['id'],
+                "nombre": user['nombre'],
+                "email": user['email'],
+                "telefono": user['telefono']
+            }
+        except JWTError:
+            return None
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
+    """Dependency para obtener el usuario actual desde el JWT token"""
+    user = AuthService.verify_token(credentials.credentials)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+    return user
