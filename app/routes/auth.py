@@ -5,7 +5,7 @@ from app.schemas.registration_otp import RegistrationOTPRequest
 from app.controllers.auth_controller import AuthController
 from app.controllers.password_reset_controller import PasswordResetController
 from app.controllers.registration_otp_controller import RegistrationOTPController
-from app.utils.auth_middleware import get_current_user
+from app.utils.auth_simple import get_current_user
 from app.utils.logger import log_info
 from typing import Dict
 

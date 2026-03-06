@@ -102,14 +102,41 @@ class UserService:
         
         # Registrar visita efectiva
         if UserVisit.register_visit(expected_user_id, expected_business_id, visit_date):
-            return {
+            # Verificar si merece un premio
+            from app.services.reward_service import RewardService
+            reward = RewardService.check_and_generate_reward(expected_user_id, expected_business_id)
+            
+            # Obtener información de ronda actual
+            from app.models.user_round import UserRound
+            round_stats = UserRound.get_user_round_stats(expected_user_id, expected_business_id)
+            current_round = round_stats['current_round']
+            
+            # Obtener configuración del negocio
+            cursor.execute("SELECT visits_for_prize FROM businesses WHERE id = %s", (expected_business_id,))
+            business = cursor.fetchone()
+            max_visits = business['visits_for_prize'] if business else 6
+            
+            result = {
                 "valid": True,
                 "visit_registered": True,
                 "visit_data": {
                     "user_id": qr_data["user_id"],
                     "business_id": qr_data["business_id"],
                     "visit_date": visit_date.isoformat()
-                }
+                },
+                "current_round": current_round['round_number'] if current_round else 1,
+                "progress_in_round": current_round['progress_in_round'] if current_round else 1,
+                "max_visits_per_round": max_visits
             }
+            
+            # Agregar información del premio si se generó
+            if reward:
+                result["reward_earned"] = True
+                result["reward_data"] = reward
+                log_info(f"Premio automático generado para usuario {expected_user_id}")
+            else:
+                result["reward_earned"] = False
+            
+            return result
         else:
             return {"valid": False, "error": "Error registrando la visita"}

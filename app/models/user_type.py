@@ -1,4 +1,4 @@
-from app.config.database import get_db_connection
+from app.config.database_sqlite import get_db_connection
 from app.utils.logger import log_info, log_error
 from typing import Optional, Dict
 
@@ -11,7 +11,7 @@ class UserType:
         connection = get_db_connection()
         try:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT * FROM user_types WHERE type_hash = %s AND active = 1", (type_hash,))
+                cursor.execute("SELECT * FROM user_types WHERE type_hash = %s AND active = TRUE", (type_hash,))
                 return cursor.fetchone()
         except Exception as e:
             log_error("Error obteniendo tipo de usuario", error=e)
@@ -25,7 +25,7 @@ class UserType:
         connection = get_db_connection()
         try:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT * FROM user_types WHERE active = 1 ORDER BY id")
+                cursor.execute("SELECT * FROM user_types WHERE active = TRUE ORDER BY id")
                 return cursor.fetchall()
         except Exception as e:
             log_error("Error obteniendo tipos de usuario", error=e)

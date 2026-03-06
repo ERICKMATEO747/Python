@@ -26,10 +26,10 @@ class User:
                 
                 log_info("Creando usuario en BD", email=email, telefono=telefono[:4] + "****" if telefono else None, user_type=user_type['type_name'])
                 cursor.execute(
-                    "INSERT INTO users (nombre, email, telefono, password, user_type_id) VALUES (%s, %s, %s, %s, %s)",
+                    "INSERT INTO users (nombre, email, telefono, password, user_type_id) VALUES (%s, %s, %s, %s, %s) RETURNING id",
                     (nombre, email, telefono, hashed_password, user_type['id'])
                 )
-                user_id = cursor.lastrowid
+                user_id = cursor.fetchone()['id']
                 connection.commit()
                 log_info("Usuario creado en BD", user_id=user_id)
                 return {
@@ -37,7 +37,7 @@ class User:
                     "nombre": nombre,
                     "email": email,
                     "telefono": telefono,
-                    "user_type": user_type['type_name']
+                    "user_type": user_type['id']
                 }
         except Exception as e:
             log_error("Error creando usuario en BD", error=e)
@@ -51,25 +51,16 @@ class User:
         connection = get_db_connection()
         try:
             with connection.cursor() as cursor:
-                # Intentar con JOIN, si falla usar consulta simple
-                try:
-                    cursor.execute("""
-                        SELECT u.*, ut.type_name as user_type 
-                        FROM users u 
-                        LEFT JOIN user_types ut ON u.user_type_id = ut.id 
-                        WHERE u.email = %s
-                    """, (email,))
-                    result = cursor.fetchone()
-                    if result and not result.get('user_type'):
-                        result['user_type'] = 'cliente'  # Fallback
-                    return result
-                except Exception:
-                    # Fallback para BD sin user_type_id
-                    cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
-                    result = cursor.fetchone()
-                    if result:
-                        result['user_type'] = 'cliente'
-                    return result
+                # Obtener usuario con user_type_id
+                cursor.execute("""
+                    SELECT u.*, u.user_type_id as user_type 
+                    FROM users u 
+                    WHERE u.email = %s
+                """, (email,))
+                result = cursor.fetchone()
+                if result and not result.get('user_type'):
+                    result['user_type'] = 1  # Fallback a cliente
+                return result
                 return cursor.fetchone()
         finally:
             connection.close()
@@ -109,25 +100,16 @@ class User:
         connection = get_db_connection()
         try:
             with connection.cursor() as cursor:
-                # Intentar con JOIN, si falla usar consulta simple
-                try:
-                    cursor.execute("""
-                        SELECT u.id, u.nombre, u.email, u.telefono, ut.type_name as user_type 
-                        FROM users u 
-                        LEFT JOIN user_types ut ON u.user_type_id = ut.id 
-                        WHERE u.id = %s
-                    """, (user_id,))
-                    result = cursor.fetchone()
-                    if result and not result.get('user_type'):
-                        result['user_type'] = 'cliente'  # Fallback
-                    return result
-                except Exception:
-                    # Fallback para BD sin user_type_id
-                    cursor.execute("SELECT id, nombre, email, telefono FROM users WHERE id = %s", (user_id,))
-                    result = cursor.fetchone()
-                    if result:
-                        result['user_type'] = 'cliente'
-                    return result
+                # Obtener usuario con user_type_id
+                cursor.execute("""
+                    SELECT u.id, u.nombre, u.email, u.telefono, u.user_type_id as user_type 
+                    FROM users u 
+                    WHERE u.id = %s
+                """, (user_id,))
+                result = cursor.fetchone()
+                if result and not result.get('user_type'):
+                    result['user_type'] = 1  # Fallback a cliente
+                return result
                 return cursor.fetchone()
         finally:
             connection.close()

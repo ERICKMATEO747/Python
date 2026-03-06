@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
-from app.controllers.user_controller import UserController
+from app.controllers.user_controller_sqlite import UserController
 from app.schemas.user import UserProfileUpdate, VisitCreate, QRValidation
-from app.services.auth_service import get_current_user
+from app.utils.auth_simple import get_current_user
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 

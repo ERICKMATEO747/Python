@@ -2,8 +2,9 @@
 fastapi==0.115.4
 uvicorn[standard]==0.32.0
 
-# Database
-pymysql==1.1.1
+# Database - PostgreSQL
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.23
 
 # Security & Authentication
 cryptography==43.0.3
@@ -27,3 +28,9 @@ requests==2.32.3
 # QR Code generation
 qrcode[pil]==8.0
 Pillow==11.0.0
+
+# Push Notifications
+pywebpush==2.1.2
+
+# WebSockets
+python-socketio==5.15.0

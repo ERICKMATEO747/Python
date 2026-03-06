@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status, Request
 from app.schemas.auth import UserRegister, UserLogin, TokenResponse, UserResponse
-from app.services.auth_service import AuthService
+from app.services.auth_service_sqlite import AuthService
 from app.utils.email_service import EmailService
 from app.utils.logger import log_info, log_error, log_warning
 from app.utils.security import rate_limiter

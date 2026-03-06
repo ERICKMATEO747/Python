@@ -8,7 +8,7 @@ class Municipality:
         connection = get_db_connection()
         try:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT * FROM municipalities WHERE active = 1 ORDER BY municipio")
+                cursor.execute("SELECT * FROM municipalities WHERE active = TRUE ORDER BY municipio")
                 return cursor.fetchall()
         except Exception as e:
             log_error("Error obteniendo municipios", error=e)

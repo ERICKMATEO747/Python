@@ -16,8 +16,8 @@ class OTP:
                 # Eliminar OTPs anteriores del mismo email
                 cursor.execute("DELETE FROM otp_codes WHERE email = %s", (email,))
                 
-                # Crear nuevo OTP con expiración de 10 minutos
-                expires_at = datetime.now() + timedelta(minutes=10)
+                # Crear nuevo OTP con expiración de 15 minutos (UTC)
+                expires_at = datetime.utcnow() + timedelta(minutes=15)
                 cursor.execute(
                     "INSERT INTO otp_codes (email, otp_code, expires_at) VALUES (%s, %s, %s)",
                     (email, otp_code, expires_at)
@@ -59,9 +59,16 @@ class OTP:
                 log_info("OTP encontrado en BD", email=email, otp_code=otp_code, 
                         expires_at=str(otp_record['expires_at']))
                 
-                # Ahora verificar si no ha expirado
+                # Obtener tiempo actual del servidor en UTC
+                cursor.execute("SELECT UTC_TIMESTAMP() as server_time")
+                server_time = cursor.fetchone()['server_time']
+                log_info("Comparación de tiempos", email=email, 
+                        server_time=str(server_time), 
+                        expires_at=str(otp_record['expires_at']))
+                
+                # Ahora verificar si no ha expirado usando UTC
                 cursor.execute(
-                    "SELECT * FROM otp_codes WHERE email = %s AND otp_code = %s AND expires_at > NOW()",
+                    "SELECT * FROM otp_codes WHERE email = %s AND otp_code = %s AND expires_at > UTC_TIMESTAMP()",
                     (email, otp_code)
                 )
                 valid_result = cursor.fetchone()
@@ -71,7 +78,8 @@ class OTP:
                     return True
                 else:
                     log_warning("OTP expirado", email=email, otp_code=otp_code, 
-                              expires_at=str(otp_record['expires_at']))
+                              expires_at=str(otp_record['expires_at']),
+                              server_time=str(server_time))
                     return False
                     
         except Exception as e:

@@ -2,7 +2,7 @@ from app.models.user import User
 from app.models.otp import OTP
 from app.utils.email_service import EmailService
 from app.services.auth_service import AuthService
-from app.utils.logger import log_info, log_error
+from app.utils.logger import log_info, log_error, log_warning
 from typing import Dict, Optional
 
 class PasswordResetService:

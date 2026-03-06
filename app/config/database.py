@@ -1,25 +1,14 @@
-import pymysql
+import psycopg2
+import psycopg2.extras
 from app.config.settings import settings
-from app.utils.logger import log_info
+from app.utils.logger import log_info, log_error
 
 def get_db_connection():
-    """Obtiene conexión a la base de datos MySQL"""
+    """Obtiene conexión a la base de datos PostgreSQL"""
     try:
-        # Parsear URL de conexión
-        url_parts = settings.database_url.replace("mysql+pymysql://", "").split("/")
-        auth_db = url_parts[1]
-        host_port_user = url_parts[0].split("@")
-        host_port = host_port_user[1].split(":")
-        user_pass = host_port_user[0].split(":")
-        
-        connection = pymysql.connect(
-            host=host_port[0],
-            port=int(host_port[1]),
-            user=user_pass[0],
-            password=user_pass[1],
-            database=auth_db,
-            charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor
+        connection = psycopg2.connect(
+            settings.database_url,
+            cursor_factory=psycopg2.extras.RealDictCursor
         )
         return connection
     except Exception as e:
@@ -33,11 +22,14 @@ def init_database():
             # Tabla users
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    id SERIAL PRIMARY KEY,
                     nombre VARCHAR(100) NOT NULL,
-                    email VARCHAR(100) UNIQUE NULL,
-                    telefono VARCHAR(20) UNIQUE NULL,
+                    email VARCHAR(100) UNIQUE,
+                    telefono VARCHAR(20) UNIQUE,
                     password VARCHAR(255) NOT NULL,
+                    user_type_id INTEGER NOT NULL DEFAULT 1,
+                    municipality_id BIGINT,
+                    avatar VARCHAR(500),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     CONSTRAINT chk_contact CHECK (email IS NOT NULL OR telefono IS NOT NULL)
                 )
@@ -46,31 +38,34 @@ def init_database():
             # Tabla otp_codes
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS otp_codes (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    id SERIAL PRIMARY KEY,
                     email VARCHAR(100) NOT NULL,
                     otp_code VARCHAR(6) NOT NULL,
                     expires_at TIMESTAMP NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_email_otp (email, otp_code),
-                    INDEX idx_expires (expires_at)
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            
+            # Crear índices para otp_codes
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_email_otp ON otp_codes(email, otp_code)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_expires ON otp_codes(expires_at)")
             
             # Tabla user_types
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS user_types (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    id SERIAL PRIMARY KEY,
                     type_name VARCHAR(50) NOT NULL UNIQUE,
                     type_hash VARCHAR(64) NOT NULL UNIQUE,
                     description VARCHAR(200),
-                    active TINYINT(1) DEFAULT 1,
+                    active BOOLEAN DEFAULT TRUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
             # Insertar tipos de usuario por defecto solo si no existen
-            cursor.execute("SELECT COUNT(*) as count FROM user_types")
-            user_types_count = cursor.fetchone()['count']
+            cursor.execute("SELECT COUNT(*) FROM user_types")
+            result = cursor.fetchone()
+            user_types_count = result['count'] if result else 0
             
             if user_types_count == 0:
                 cursor.execute("""
@@ -80,226 +75,180 @@ def init_database():
                     ('admin', 'c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456a1b2', 'Administrador del sistema')
                 """)
                 log_info("Tipos de usuario insertados")
-            else:
-                log_info("Tipos de usuario ya existen, omitiendo inserción")
             
             # Tabla municipalities
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS municipalities (
-                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    id BIGSERIAL PRIMARY KEY,
                     municipio VARCHAR(100) NOT NULL,
                     state VARCHAR(50) NOT NULL,
                     active BOOLEAN DEFAULT TRUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
             # Tabla businesses
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS businesses (
-                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                    name VARCHAR(200) NOT NULL,
+                    id BIGSERIAL PRIMARY KEY,
+                    name VARCHAR(200) NOT NULL UNIQUE,
                     category VARCHAR(100) NOT NULL,
                     address TEXT,
-                    municipality_id BIGINT,
+                    municipality_id BIGINT REFERENCES municipalities(id),
                     phone VARCHAR(20),
                     email VARCHAR(100),
                     logo VARCHAR(500),
                     description TEXT,
                     rating DECIMAL(2,1) DEFAULT 0.0,
+                    visits_for_prize INTEGER DEFAULT 6,
                     facebook VARCHAR(500),
                     instagram VARCHAR(500),
                     tiktok VARCHAR(500),
                     whatsapp VARCHAR(500),
+                    owner_user_id INTEGER REFERENCES users(id),
                     active BOOLEAN DEFAULT TRUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (municipality_id) REFERENCES municipalities(id)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
-            # Agregar índice único para evitar duplicados en businesses
+            # Agregar columna owner_user_id si no existe
             try:
-                cursor.execute("ALTER TABLE businesses ADD UNIQUE INDEX idx_business_name (name)")
-                log_info("Índice único agregado a businesses.name")
-            except Exception as e:
-                if "Duplicate key name" not in str(e):
-                    log_info(f"No se pudo agregar índice único: {str(e)}")
+                cursor.execute("ALTER TABLE businesses ADD COLUMN owner_user_id INTEGER REFERENCES users(id)")
+            except:
+                pass  # Ya existe
             
             # Tabla business_menu
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS business_menu (
-                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                    business_id BIGINT NOT NULL,
+                    id BIGSERIAL PRIMARY KEY,
+                    business_id BIGINT NOT NULL REFERENCES businesses(id),
                     producto VARCHAR(200) NOT NULL,
                     descripcion TEXT,
                     precio DECIMAL(10,2) NOT NULL,
                     categoria VARCHAR(100),
                     disponible BOOLEAN DEFAULT TRUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (business_id) REFERENCES businesses(id)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
-            # Tabla user_visits (sin foreign keys inicialmente)
+            # Tabla user_visits
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS user_visits (
-                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                    user_id INT NOT NULL,
-                    business_id BIGINT NOT NULL,
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    business_id BIGINT NOT NULL REFERENCES businesses(id),
                     visit_date TIMESTAMP NOT NULL,
                     visit_month VARCHAR(7) NOT NULL,
-                    status ENUM('pending', 'completed', 'cancelled') DEFAULT 'completed',
+                    status VARCHAR(20) DEFAULT 'completed' CHECK (status IN ('pending', 'completed', 'cancelled')),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    INDEX idx_user_business_month (user_id, business_id, visit_month)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
-            # Agregar foreign keys después si no existen
+            # Crear índice para user_visits
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_business_month ON user_visits(user_id, business_id, visit_month)")
+            
+            # Tabla user_rounds (Sistema de rondas)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_rounds (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    business_id BIGINT NOT NULL REFERENCES businesses(id),
+                    round_number INTEGER NOT NULL DEFAULT 1,
+                    progress_in_round INTEGER NOT NULL DEFAULT 0,
+                    round_start_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP NULL,
+                    is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+                    is_reward_claimed BOOLEAN NOT NULL DEFAULT FALSE,
+                    last_visit_id BIGINT NULL
+                )
+            """)
+            
+            # Crear índices para user_rounds
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_rounds_user_business ON user_rounds(user_id, business_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_rounds_completed ON user_rounds(is_completed)")
+            # Agregar foreign keys a users
             try:
-                cursor.execute("""
-                    SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-                    WHERE TABLE_SCHEMA = DATABASE() 
-                    AND TABLE_NAME = 'user_visits' 
-                    AND COLUMN_NAME = 'user_id' 
-                    AND REFERENCED_TABLE_NAME = 'users'
-                """)
-                fk_user_exists = cursor.fetchone()['count'] > 0
-                
-                if not fk_user_exists:
-                    cursor.execute("ALTER TABLE user_visits ADD FOREIGN KEY (user_id) REFERENCES users(id)")
-                    log_info("Foreign key user_id en user_visits agregada")
-            except Exception as e:
-                log_info(f"No se pudo agregar FK user_id: {str(e)}")
+                cursor.execute("ALTER TABLE users ADD CONSTRAINT fk_user_type FOREIGN KEY (user_type_id) REFERENCES user_types(id)")
+            except:
+                pass  # Ya existe
             
             try:
-                cursor.execute("""
-                    SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-                    WHERE TABLE_SCHEMA = DATABASE() 
-                    AND TABLE_NAME = 'user_visits' 
-                    AND COLUMN_NAME = 'business_id' 
-                    AND REFERENCED_TABLE_NAME = 'businesses'
-                """)
-                fk_business_exists = cursor.fetchone()['count'] > 0
-                
-                if not fk_business_exists:
-                    cursor.execute("ALTER TABLE user_visits ADD FOREIGN KEY (business_id) REFERENCES businesses(id)")
-                    log_info("Foreign key business_id en user_visits agregada")
-            except Exception as e:
-                log_info(f"No se pudo agregar FK business_id: {str(e)}")
-            
-            # Verificar y agregar columnas a users si no existen
-            columns_to_add = [
-                ('user_type_id', 'INT NOT NULL DEFAULT 1'),
-                ('municipality_id', 'BIGINT'),
-                ('avatar', 'VARCHAR(500)')
-            ]
-            
-            for column_name, column_def in columns_to_add:
-                cursor.execute("""
-                    SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.COLUMNS 
-                    WHERE TABLE_SCHEMA = DATABASE() 
-                    AND TABLE_NAME = 'users' 
-                    AND COLUMN_NAME = %s
-                """, (column_name,))
-                column_exists = cursor.fetchone()['count'] > 0
-                
-                if not column_exists:
-                    log_info(f"Agregando columna {column_name} a tabla users")
-                    cursor.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}")
-            
-            # Agregar foreign keys si no existen
-            fks_to_add = [
-                ('user_type_id', 'user_types'),
-                ('municipality_id', 'municipalities')
-            ]
-            
-            for column_name, ref_table in fks_to_add:
-                cursor.execute("""
-                    SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-                    WHERE TABLE_SCHEMA = DATABASE() 
-                    AND TABLE_NAME = 'users' 
-                    AND COLUMN_NAME = %s 
-                    AND REFERENCED_TABLE_NAME = %s
-                """, (column_name, ref_table))
-                fk_exists = cursor.fetchone()['count'] > 0
-                
-                if not fk_exists:
-                    cursor.execute(f"ALTER TABLE users ADD FOREIGN KEY ({column_name}) REFERENCES {ref_table}(id)")
-                    log_info(f"Foreign key {column_name} agregada exitosamente")
+                cursor.execute("ALTER TABLE users ADD CONSTRAINT fk_municipality FOREIGN KEY (municipality_id) REFERENCES municipalities(id)")
+            except:
+                pass  # Ya existe
             
             # Insertar datos de prueba solo si no existen
-            try:
-                # Verificar si ya existen municipios
-                cursor.execute("SELECT COUNT(*) as count FROM municipalities")
-                municipality_count = cursor.fetchone()['count']
+            cursor.execute("SELECT COUNT(*) FROM municipalities")
+            result = cursor.fetchone()
+            municipality_count = result['count'] if result else 0
+            
+            if municipality_count == 0:
+                cursor.execute("""
+                    INSERT INTO municipalities (municipio, state) VALUES
+                    ('Papantla', 'Veracruz'),
+                    ('Coatzintla', 'Veracruz'),
+                    ('Poza Rica', 'Veracruz'),
+                    ('Tuxpan', 'Veracruz')
+                """)
+                log_info("Municipios de ejemplo insertados")
+            
+            cursor.execute("SELECT COUNT(*) FROM businesses")
+            result = cursor.fetchone()
+            business_count = result['count'] if result else 0
+            
+            if business_count == 0:
+                # Primero crear un usuario admin por defecto
+                cursor.execute("""
+                    INSERT INTO users (nombre, email, password, user_type_id) VALUES
+                    ('Administrador', 'admin@flevoapp.com', '$2b$12$LQv3c1yqBWVHxkd0LQ4YCOdHrCkUAI6H0O/8VfzCr5FqSQqIBfxSm', 3)
+                    ON CONFLICT (email) DO NOTHING
+                """)
                 
-                if municipality_count == 0:
-                    cursor.execute("""
-                        INSERT INTO municipalities (municipio, state) VALUES
-                        ('Papantla', 'Veracruz'),
-                        ('Coatzintla', 'Veracruz'),
-                        ('Poza Rica', 'Veracruz'),
-                        ('Tuxpan', 'Veracruz')
-                    """)
-                    log_info("Municipios de ejemplo insertados")
-                else:
-                    log_info("Municipios ya existen, omitiendo inserción")
-                
-                # Verificar si ya existen businesses
-                cursor.execute("SELECT COUNT(*) as count FROM businesses")
-                business_count = cursor.fetchone()['count']
-                
-                if business_count == 0:
-                    cursor.execute("""
-                        INSERT INTO businesses (name, category, address, municipality_id, phone, email, description, rating, facebook, instagram, tiktok, whatsapp) VALUES
-                        ('Restaurante El Totonaco', 'Restaurante', 'Calle Enríquez 123, Centro', 1, '7841234567', 'contacto@eltotonaco.com', 'Comida tradicional veracruzana', 4.5, 'https://facebook.com/eltotonaco', 'https://instagram.com/eltotonaco', 'https://tiktok.com/@eltotonaco', 'https://wa.me/527841234567'),
-                        ('Café Vanilla', 'Cafetería', 'Av. 20 de Noviembre 45', 2, '7822345678', 'info@cafevanilla.com', 'Café de especialidad y vainilla', 4.2, 'https://facebook.com/cafevanilla', 'https://instagram.com/cafevanilla', 'https://tiktok.com/@cafevanilla', 'https://wa.me/527822345678'),
-                        ('Boutique Jarocha', 'Ropa', 'Plaza Poza Rica 67', 3, '7823456789', 'ventas@boutiquejarocha.com', 'Ropa y accesorios regionales', 4.0, 'https://facebook.com/boutiquejarocha', 'https://instagram.com/boutiquejarocha', 'https://tiktok.com/@boutiquejarocha', 'https://wa.me/527823456789'),
-                        ('Farmacia del Puerto', 'Farmacia', 'Malecón Tuxpan 89', 4, '7834567890', 'contacto@farmaciapuerto.com', 'Medicamentos y productos de salud', 4.3, 'https://facebook.com/farmaciapuerto', 'https://instagram.com/farmaciapuerto', 'https://tiktok.com/@farmaciapuerto', 'https://wa.me/527834567890'),
-                        ('Gimnasio Coatza Fit', 'Deportes', 'Calle Hidalgo 12', 2, '7825678901', 'info@coatzafit.com', 'Gimnasio y entrenamiento personal', 4.4, 'https://facebook.com/coatzafit', 'https://instagram.com/coatzafit', 'https://tiktok.com/@coatzafit', 'https://wa.me/527825678901')
-                    """)
-                    log_info("Businesses de ejemplo insertados")
-                else:
-                    log_info("Businesses ya existen, omitiendo inserción")
-                
-                # Insertar menús de ejemplo solo si no existen
-                cursor.execute("SELECT COUNT(*) as count FROM business_menu")
-                menu_count = cursor.fetchone()['count']
-                
-                if menu_count == 0:
-                    cursor.execute("""
-                        INSERT INTO business_menu (business_id, producto, descripcion, precio, categoria) VALUES
-                        (1, 'Mole de Olla', 'Mole tradicional veracruzano con pollo', 85.00, 'Platillos'),
-                        (1, 'Pescado a la Veracruzana', 'Pescado fresco con salsa veracruzana', 120.00, 'Platillos'),
-                        (1, 'Agua de Chía con Limón', 'Bebida refrescante natural', 30.00, 'Bebidas'),
-                        (2, 'Café de Olla', 'Café tradicional con canela y piloncillo', 45.00, 'Cafés'),
-                        (2, 'Flan de Vainilla', 'Postre con vainilla de Papantla', 55.00, 'Postres'),
-                        (2, 'Torta de Jamón', 'Torta veracruzana con ingredientes frescos', 65.00, 'Alimentos'),
-                        (3, 'Guayabera Bordada', 'Guayabera tradicional veracruzana', 450.00, 'Ropa'),
-                        (3, 'Huipil Totonaco', 'Huipil artesanal de la región', 650.00, 'Ropa'),
-                        (3, 'Huaraches de Cuero', 'Calzado artesanal mexicano', 380.00, 'Calzado'),
-                        (4, 'Paracetamol 500mg', 'Analgésico y antipirético', 25.00, 'Medicamentos'),
-                        (4, 'Vitamina C', 'Suplemento vitamínico 1000mg', 180.00, 'Suplementos'),
-                        (4, 'Termómetro Digital', 'Termómetro clínico digital', 120.00, 'Equipos'),
-                        (5, 'Membresía Mensual', 'Acceso completo al gimnasio por 1 mes', 350.00, 'Membresías'),
-                        (5, 'Clase de Zumba', 'Clase grupal de baile y ejercicio', 60.00, 'Clases'),
-                        (5, 'Entrenamiento Personal', 'Sesión individual con entrenador', 250.00, 'Servicios')
-                    """)
-                    log_info("Menús de ejemplo insertados")
-                else:
-                    log_info("Menús ya existen, omitiendo inserción")
-                log_info("Datos de prueba verificados correctamente")
-            except Exception as e:
-                log_info(f"Error insertando datos de prueba: {str(e)}")
+                cursor.execute("""
+                    INSERT INTO businesses (name, category, address, municipality_id, phone, email, description, rating, facebook, instagram, tiktok, whatsapp, owner_user_id) VALUES
+                    ('Restaurante El Totonaco', 'Restaurante', 'Calle Enríquez 123, Centro', 1, '7841234567', 'contacto@eltotonaco.com', 'Comida tradicional veracruzana', 4.5, 'https://facebook.com/eltotonaco', 'https://instagram.com/eltotonaco', 'https://tiktok.com/@eltotonaco', 'https://wa.me/527841234567', 1),
+                    ('Café Vanilla', 'Cafetería', 'Av. 20 de Noviembre 45', 2, '7822345678', 'info@cafevanilla.com', 'Café de especialidad y vainilla', 4.2, 'https://facebook.com/cafevanilla', 'https://instagram.com/cafevanilla', 'https://tiktok.com/@cafevanilla', 'https://wa.me/527822345678', 1),
+                    ('Boutique Jarocha', 'Ropa', 'Plaza Poza Rica 67', 3, '7823456789', 'ventas@boutiquejarocha.com', 'Ropa y accesorios regionales', 4.0, 'https://facebook.com/boutiquejarocha', 'https://instagram.com/boutiquejarocha', 'https://tiktok.com/@boutiquejarocha', 'https://wa.me/527823456789', 1),
+                    ('Farmacia del Puerto', 'Farmacia', 'Malecón Tuxpan 89', 4, '7834567890', 'contacto@farmaciapuerto.com', 'Medicamentos y productos de salud', 4.3, 'https://facebook.com/farmaciapuerto', 'https://instagram.com/farmaciapuerto', 'https://tiktok.com/@farmaciapuerto', 'https://wa.me/527834567890', 1),
+                    ('Gimnasio Coatza Fit', 'Deportes', 'Calle Hidalgo 12', 2, '7825678901', 'info@coatzafit.com', 'Gimnasio y entrenamiento personal', 4.4, 'https://facebook.com/coatzafit', 'https://instagram.com/coatzafit', 'https://tiktok.com/@coatzafit', 'https://wa.me/527825678901', 1)
+                """)
+                log_info("Businesses de ejemplo insertados")
+            
+            cursor.execute("SELECT COUNT(*) FROM business_menu")
+            result = cursor.fetchone()
+            menu_count = result['count'] if result else 0
+            
+            if menu_count == 0:
+                cursor.execute("""
+                    INSERT INTO business_menu (business_id, producto, descripcion, precio, categoria) VALUES
+                    (1, 'Mole de Olla', 'Mole tradicional veracruzano con pollo', 85.00, 'Platillos'),
+                    (1, 'Pescado a la Veracruzana', 'Pescado fresco con salsa veracruzana', 120.00, 'Platillos'),
+                    (1, 'Agua de Chía con Limón', 'Bebida refrescante natural', 30.00, 'Bebidas'),
+                    (2, 'Café de Olla', 'Café tradicional con canela y piloncillo', 45.00, 'Cafés'),
+                    (2, 'Flan de Vainilla', 'Postre con vainilla de Papantla', 55.00, 'Postres'),
+                    (2, 'Torta de Jamón', 'Torta veracruzana con ingredientes frescos', 65.00, 'Alimentos'),
+                    (3, 'Guayabera Bordada', 'Guayabera tradicional veracruzana', 450.00, 'Ropa'),
+                    (3, 'Huipil Totonaco', 'Huipil artesanal de la región', 650.00, 'Ropa'),
+                    (3, 'Huaraches de Cuero', 'Calzado artesanal mexicano', 380.00, 'Calzado'),
+                    (4, 'Paracetamol 500mg', 'Analgésico y antipirético', 25.00, 'Medicamentos'),
+                    (4, 'Vitamina C', 'Suplemento vitamínico 1000mg', 180.00, 'Suplementos'),
+                    (4, 'Termómetro Digital', 'Termómetro clínico digital', 120.00, 'Equipos'),
+                    (5, 'Membresía Mensual', 'Acceso completo al gimnasio por 1 mes', 350.00, 'Membresías'),
+                    (5, 'Clase de Zumba', 'Clase grupal de baile y ejercicio', 60.00, 'Clases'),
+                    (5, 'Entrenamiento Personal', 'Sesión individual con entrenador', 250.00, 'Servicios')
+                """)
+                log_info("Menús de ejemplo insertados")
             
             connection.commit()
-            log_info("Base de datos inicializada correctamente")
+            log_info("Base de datos PostgreSQL inicializada correctamente")
     except Exception as e:
-        log_error("Error inicializando base de datos", error=e)
+        print(f"Error detallado: {str(e)}")
+        print(f"Tipo de error: {type(e)}")
+        log_error(f"Error inicializando base de datos: {str(e)}")
         raise
     finally:
         connection.close()

@@ -4,10 +4,21 @@ from jose import JWTError, jwt
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config.settings import settings
-from app.models.user import User
+from app.models.user_sqlite import User
 from typing import Optional, Dict
 
 security = HTTPBearer()
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[Dict]:
+    """Obtiene el usuario actual desde el token JWT"""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Token requerido")
+    
+    user = AuthService.verify_token(credentials.credentials)
+    if not user:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    
+    return user
 
 class AuthService:
     """Servicio de autenticación con lógica de negocio"""
@@ -56,6 +67,8 @@ class AuthService:
     @staticmethod
     def authenticate_user(email: str, password: str) -> Optional[Dict]:
         """Autentica un usuario y retorna sus datos si es válido"""
+        from app.config.database import get_db_connection
+        
         user = User.get_by_email(email)
         if not user:
             return None
@@ -63,14 +76,31 @@ class AuthService:
         if not AuthService.verify_password(password, user['password']):
             return None
         
-        # Retornar usuario sin contraseña
-        return {
+        # Datos base del usuario
+        user_data = {
             "id": user['id'],
             "nombre": user['nombre'],
             "email": user['email'],
             "telefono": user['telefono'],
             "user_type": user['user_type']
         }
+        
+        # Si es usuario tipo negocio (2), agregar business_id
+        if user['user_type'] == 2:
+            connection = get_db_connection()
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT id FROM businesses WHERE owner_user_id = ? AND active = 1 LIMIT 1",
+                        (user['id'],)
+                    )
+                    business = cursor.fetchone()
+                    if business:
+                        user_data['business_id'] = business['id']
+            finally:
+                connection.close()
+        
+        return user_data
     
     @staticmethod
     def verify_token(token: str) -> Optional[Dict]:
@@ -85,18 +115,32 @@ class AuthService:
             if user is None:
                 return None
             
-            return {
+            # Datos base del usuario
+            user_data = {
                 "id": user['id'],
                 "nombre": user['nombre'],
                 "email": user['email'],
-                "telefono": user['telefono']
+                "telefono": user['telefono'],
+                "user_type": user.get('user_type', 1)
             }
+            
+            # Si es usuario tipo negocio (2), agregar business_id
+            if user.get('user_type') == 2:
+                from app.config.database import get_db_connection
+                connection = get_db_connection()
+                try:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT id FROM businesses WHERE owner_user_id = ? AND active = 1 LIMIT 1",
+                            (user['id'],)
+                        )
+                        business = cursor.fetchone()
+                        if business:
+                            user_data['business_id'] = business['id']
+                finally:
+                    connection.close()
+            
+            return user_data
         except JWTError:
             return None
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
-    """Dependency para obtener el usuario actual desde el JWT token"""
-    user = AuthService.verify_token(credentials.credentials)
-    if user is None:
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
-    return user

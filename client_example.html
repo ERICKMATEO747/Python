@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flevo - Notificaciones Demo</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>🔔 Flevo Notifications Demo</h1>
+    
+    <div>
+        <h2>Push Notifications</h2>
+        <button id="requestPermission">Solicitar Permisos</button>
+        <button id="subscribe">Suscribirse</button>
+        <button id="testNotification">Enviar Prueba</button>
+        <div id="pushStatus">Estado: No configurado</div>
+    </div>
+    
+    <div>
+        <h2>WebSocket</h2>
+        <button id="connectWS">Conectar WebSocket</button>
+        <button id="disconnectWS">Desconectar</button>
+        <div id="wsStatus">Estado: Desconectado</div>
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let socket = null;
+        const API_BASE = 'http://localhost:8000';
+        const WS_URL = 'http://localhost:8000/ws';
+        
+        // JWT Token de prueba (reemplazar con token real)
+        const JWT_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...';
+        
+        // Push Notifications
+        document.getElementById('requestPermission').onclick = async () => {
+            const permission = await Notification.requestPermission();
+            document.getElementById('pushStatus').textContent = `Permisos: ${permission}`;
+        };
+        
+        document.getElementById('subscribe').onclick = async () => {
+            try {
+                // Obtener clave VAPID
+                const vapidResponse = await fetch(`${API_BASE}/api/notifications/vapid-public-key`);
+                const vapidData = await vapidResponse.json();
+                
+                // Registrar service worker
+                const registration = await navigator.serviceWorker.register('/sw.js');
+                
+                // Crear suscripción
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: vapidData.public_key
+                });
+                
+                // Enviar al backend
+                const response = await fetch(`${API_BASE}/api/notifications/subscribe`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${JWT_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(subscription)
+                });
+                
+                if (response.ok) {
+                    document.getElementById('pushStatus').textContent = 'Estado: Suscrito ✅';
+                } else {
+                    document.getElementById('pushStatus').textContent = 'Estado: Error ❌';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('pushStatus').textContent = `Error: ${error.message}`;
+            }
+        };
+        
+        document.getElementById('testNotification').onclick = async () => {
+            try {
+                const response = await fetch(`${API_BASE}/api/notifications/test`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${JWT_TOKEN}`
+                    }
+                });
+                
+                if (response.ok) {
+                    alert('Notificación de prueba enviada');
+                } else {
+                    alert('Error enviando notificación');
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        };
+        
+        // WebSocket
+        document.getElementById('connectWS').onclick = () => {
+            socket = io(WS_URL, {
+                auth: {
+                    token: JWT_TOKEN
+                }
+            });
+            
+            socket.on('connect', () => {
+                document.getElementById('wsStatus').textContent = 'Estado: Conectado ✅';
+                
+                // Conectar como app de usuario
+                socket.emit('connect_customer_app', {});
+            });
+            
+            socket.on('disconnect', () => {
+                document.getElementById('wsStatus').textContent = 'Estado: Desconectado ❌';
+            });
+            
+            socket.on('connected', (data) => {
+                addMessage(`Conectado como: ${data.type}`);
+            });
+            
+            socket.on('event:visit_registered', (data) => {
+                addMessage(`🏪 Visita registrada: ${data.message}`);
+            });
+            
+            socket.on('event:reward_redeemed', (data) => {
+                addMessage(`🎉 Premio redimido: ${data.message}`);
+            });
+            
+            socket.on('event:new_round_started', (data) => {
+                addMessage(`🔄 Nueva ronda: ${data.message}`);
+            });
+            
+            socket.on('event:system_notification', (data) => {
+                addMessage(`📢 Sistema: ${data.message}`);
+            });
+        };
+        
+        document.getElementById('disconnectWS').onclick = () => {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+        };
+        
+        function addMessage(message) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html>
