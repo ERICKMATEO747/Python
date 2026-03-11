@@ -1,107 +1,159 @@
 from fastapi import HTTPException
+from app.config.database_sqlite import get_db_connection
+from typing import Dict, List
 
 class MenuController:
     @staticmethod
-    def get_business_menu(business_id: int):
+    def get_business_menu(business_id: int) -> Dict:
+        """Obtiene el menú completo de un negocio desde la base de datos"""
+        connection = get_db_connection()
         try:
-            # Datos dummy de menú según el negocio
-            menus = {
-                1: {  # Restaurante El Totonaco
-                    "categories": [
-                        {
-                            "id": 1,
-                            "name": "Platillos Principales",
-                            "items": [
-                                {"id": 1, "name": "Mole Poblano", "price": 180.00, "description": "Tradicional mole con pollo", "image": "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=300"},
-                                {"id": 2, "name": "Chiles en Nogada", "price": 220.00, "description": "Platillo típico veracruzano", "image": "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=300"},
-                                {"id": 3, "name": "Pescado a la Veracruzana", "price": 250.00, "description": "Pescado fresco con salsa veracruzana", "image": "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=300"}
-                            ]
-                        },
-                        {
-                            "id": 2,
-                            "name": "Bebidas",
-                            "items": [
-                                {"id": 4, "name": "Agua de Jamaica", "price": 35.00, "description": "Agua fresca natural", "image": "https://images.unsplash.com/photo-1544145945-f90425340c7e?w=300"},
-                                {"id": 5, "name": "Cerveza Nacional", "price": 45.00, "description": "Cerveza fría", "image": "https://images.unsplash.com/photo-1544145945-f90425340c7e?w=300"}
-                            ]
-                        }
-                    ]
-                },
-                2: {  # Café Vanilla
-                    "categories": [
-                        {
-                            "id": 1,
-                            "name": "Cafés Especiales",
-                            "items": [
-                                {"id": 1, "name": "Café Vanilla Latte", "price": 65.00, "description": "Café con vainilla de la región", "image": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=300"},
-                                {"id": 2, "name": "Cappuccino", "price": 55.00, "description": "Café espresso con espuma de leche", "image": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=300"},
-                                {"id": 3, "name": "Americano", "price": 40.00, "description": "Café negro tradicional", "image": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=300"}
-                            ]
-                        },
-                        {
-                            "id": 2,
-                            "name": "Postres",
-                            "items": [
-                                {"id": 4, "name": "Cheesecake de Vainilla", "price": 85.00, "description": "Pastel de queso con vainilla", "image": "https://images.unsplash.com/photo-1488900128323-21503983a07e?w=300"},
-                                {"id": 5, "name": "Brownie", "price": 70.00, "description": "Brownie de chocolate", "image": "https://images.unsplash.com/photo-1488900128323-21503983a07e?w=300"}
-                            ]
-                        }
-                    ]
-                },
-                3: {  # Pizzería Don Juan
-                    "categories": [
-                        {
-                            "id": 1,
-                            "name": "Pizzas Artesanales",
-                            "items": [
-                                {"id": 1, "name": "Pizza Margherita", "price": 180.00, "description": "Tomate, mozzarella y albahaca", "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300"},
-                                {"id": 2, "name": "Pizza Pepperoni", "price": 220.00, "description": "Pepperoni y queso mozzarella", "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300"},
-                                {"id": 3, "name": "Pizza Hawaiana", "price": 200.00, "description": "Jamón y piña", "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300"}
-                            ]
-                        }
-                    ]
-                }
-            }
+            cursor = connection.cursor()
             
-            # Menú genérico para otros negocios
-            default_menu = {
-                "categories": [
-                    {
-                        "id": 1,
-                        "name": "Menú Principal",
-                        "items": [
-                            {"id": 1, "name": "Platillo Especial", "price": 150.00, "description": "Especialidad de la casa", "image": "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=300"},
-                            {"id": 2, "name": "Bebida del Día", "price": 45.00, "description": "Bebida refrescante", "image": "https://images.unsplash.com/photo-1544145945-f90425340c7e?w=300"}
-                        ]
+            # Verificar que el negocio existe
+            cursor.execute("SELECT name FROM businesses WHERE id = ?", (business_id,))
+            business = cursor.fetchone()
+            
+            if not business:
+                raise HTTPException(status_code=404, detail="Negocio no encontrado")
+            
+            # Obtener items del menú agrupados por categoría
+            cursor.execute("""
+                SELECT category, item_name, description, price, image_url, available
+                FROM business_menus 
+                WHERE business_id = ? AND available = 1
+                ORDER BY category, item_name
+            """, (business_id,))
+            
+            menu_items = cursor.fetchall()
+            
+            if not menu_items:
+                return {
+                    "success": True,
+                    "data": {
+                        "business_id": business_id,
+                        "business_name": business["name"],
+                        "menu": {"categories": []}
                     }
-                ]
-            }
+                }
             
-            menu = menus.get(business_id, default_menu)
+            # Agrupar items por categoría
+            categories = {}
+            for item in menu_items:
+                category_name = item["category"]
+                if category_name not in categories:
+                    categories[category_name] = []
+                
+                categories[category_name].append({
+                    "name": item["item_name"],
+                    "description": item["description"],
+                    "price": item["price"],
+                    "image": item["image_url"]
+                })
+            
+            # Convertir a formato de respuesta
+            menu_categories = []
+            for category_name, items in categories.items():
+                menu_categories.append({
+                    "name": category_name,
+                    "items": items
+                })
             
             return {
                 "success": True,
                 "data": {
                     "business_id": business_id,
-                    "menu": menu
+                    "business_name": business["name"],
+                    "menu": {
+                        "categories": menu_categories
+                    }
+                }
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error obteniendo menú: {str(e)}")
+        finally:
+            connection.close()
+    
+    @staticmethod
+    def get_all_menus() -> Dict:
+        """Obtiene todos los menús de todos los negocios"""
+        connection = get_db_connection()
+        try:
+            cursor = connection.cursor()
+            
+            # Obtener todos los negocios con sus menús
+            cursor.execute("""
+                SELECT 
+                    b.id as business_id,
+                    b.name as business_name,
+                    b.category as business_category,
+                    m.category as menu_category,
+                    m.item_name,
+                    m.description,
+                    m.price,
+                    m.image_url
+                FROM businesses b
+                LEFT JOIN business_menus m ON b.id = m.business_id AND m.available = 1
+                ORDER BY b.id, m.category, m.item_name
+            """)
+            
+            results = cursor.fetchall()
+            
+            # Agrupar por negocio
+            businesses = {}
+            for row in results:
+                business_id = row["business_id"]
+                
+                if business_id not in businesses:
+                    businesses[business_id] = {
+                        "business_id": business_id,
+                        "business_name": row["business_name"],
+                        "business_category": row["business_category"],
+                        "categories": {}
+                    }
+                
+                # Si hay items de menú
+                if row["menu_category"]:
+                    category_name = row["menu_category"]
+                    if category_name not in businesses[business_id]["categories"]:
+                        businesses[business_id]["categories"][category_name] = []
+                    
+                    businesses[business_id]["categories"][category_name].append({
+                        "name": row["item_name"],
+                        "description": row["description"],
+                        "price": row["price"],
+                        "image": row["image_url"]
+                    })
+            
+            # Convertir a formato final
+            business_list = []
+            for business_data in businesses.values():
+                categories = []
+                for category_name, items in business_data["categories"].items():
+                    categories.append({
+                        "name": category_name,
+                        "items": items
+                    })
+                
+                business_list.append({
+                    "business_id": business_data["business_id"],
+                    "business_name": business_data["business_name"],
+                    "business_category": business_data["business_category"],
+                    "menu": {"categories": categories}
+                })
+            
+            return {
+                "success": True,
+                "data": {
+                    "businesses": business_list,
+                    "total_businesses": len(business_list)
                 }
             }
             
         except Exception as e:
-            return {
-                "success": True,
-                "data": {
-                    "business_id": business_id,
-                    "menu": {
-                        "categories": [
-                            {
-                                "id": 1,
-                                "name": "Menú Principal",
-                                "items": [
-                                    {"id": 1, "name": "Platillo Especial", "price": 150.00, "description": "Especialidad de la casa", "image": "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=300"}
-                                ]
-                            }
-                        ]
-                    }
-                }
-            }
+            raise HTTPException(status_code=500, detail=f"Error obteniendo menús: {str(e)}")
+        finally:
+            connection.close()

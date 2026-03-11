@@ -1,6 +1,25 @@
 # Auth API - Backend Python
 
-API REST para autenticación de usuarios con registro y login, construida con FastAPI y MySQL.
+API REST para autenticación de usuarios con registro y login, construida con FastAPI y PostgreSQL.
+
+## 🚀 Instalación Rápida
+
+### Opción 1: Instalación Automática (Recomendado)
+
+**Windows:**
+```bash
+install.bat
+```
+
+**Linux/Mac:**
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+### Opción 2: Instalación Manual
+
+Ver [INSTALL.md](INSTALL.md) para instrucciones detalladas.
 
 ## 🚀 Características
 

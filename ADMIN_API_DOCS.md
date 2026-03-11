@@ -20,7 +20,6 @@ Content-Type: application/json
 ```
 
 ---
-
 ## 📊 Dashboard
 
 ### GET /api/admin/dashboard
