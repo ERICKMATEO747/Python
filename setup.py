@@ -95,29 +95,44 @@ def setup_environment_file():
             print("✅ Manteniendo .env existente")
             return True
     
-    if not os.path.exists(".env.example"):
-        print("❌ No se encontró .env.example")
-        return False
+    # Siempre crear .env desde .env.example
+    if os.path.exists(".env.example"):
+        try:
+            with open(".env.example", "r", encoding="utf-8") as source:
+                content = source.read()
+            
+            with open(".env", "w", encoding="utf-8") as dest:
+                dest.write(content)
+            
+            print("✅ Archivo .env creado desde .env.example")
+        except Exception as e:
+            print(f"❌ Error creando .env: {e}")
+            return False
+    else:
+        # Crear .env con valores mínimos
+        print("⚠️  .env.example no encontrado, creando .env con valores por defecto")
+        try:
+            default_env = """# Configuración Mínima para Desarrollo Local
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/flevo_db
+JWT_SECRET_KEY=CHANGE-THIS-SECRET-KEY-IN-PRODUCTION
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_HOURS=24
+"""
+            with open(".env", "w", encoding="utf-8") as dest:
+                dest.write(default_env)
+            
+            print("✅ Archivo .env creado con valores por defecto")
+        except Exception as e:
+            print(f"❌ Error creando .env: {e}")
+            return False
     
-    # Copiar .env.example a .env
-    try:
-        with open(".env.example", "r") as source:
-            content = source.read()
-        
-        with open(".env", "w") as dest:
-            dest.write(content)
-        
-        print("✅ Archivo .env creado desde .env.example")
-        print("\n⚠️  IMPORTANTE: Edita el archivo .env con tus configuraciones:")
-        print("   - DATABASE_URL")
-        print("   - JWT_SECRET_KEY")
-        print("   - VAPID_PRIVATE_KEY y VAPID_PUBLIC_KEY")
-        print("   - Configuración de email (opcional)")
-        
-        return True
-    except Exception as e:
-        print(f"❌ Error creando .env: {e}")
-        return False
+    print("\n⚠️  IMPORTANTE: Edita el archivo .env con tus configuraciones:")
+    print("   - DATABASE_URL (conexión a PostgreSQL)")
+    print("   - JWT_SECRET_KEY (clave secreta para tokens)")
+    print("   - VAPID_PRIVATE_KEY y VAPID_PUBLIC_KEY (opcional)")
+    print("   - Configuración de email (opcional)")
+    
+    return True
 
 def generate_vapid_keys():
     """Genera claves VAPID para push notifications"""

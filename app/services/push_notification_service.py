@@ -10,7 +10,7 @@ class PushNotificationService:
     def __init__(self):
         self.settings = get_settings()
         self.vapid_claims = {
-            "sub": self.settings.VAPID_SUBJECT
+            "sub": self.settings.vapid_subject
         }
     
     def send_push_notification(self, user_id: int, payload: Dict) -> bool:
@@ -31,7 +31,7 @@ class PushNotificationService:
                     webpush(
                         subscription_info=subscription,
                         data=payload_json,
-                        vapid_private_key=self.settings.VAPID_PRIVATE_KEY,
+                        vapid_private_key=self.settings.vapid_private_key,
                         vapid_claims=self.vapid_claims
                     )
                     success_count += 1
